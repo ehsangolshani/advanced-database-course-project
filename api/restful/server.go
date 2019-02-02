@@ -32,9 +32,6 @@ func SearchRestaurant(writer http.ResponseWriter, request *http.Request, params 
 	averageCost := queryVars.Get("average_cost")
 	address := queryVars.Get("address")
 	rate := queryVars.Get("rate")
-	wifiAvailable := queryVars.Get("wifi_available")
-	//Cuisine := queryVars.Get("cuisine")
-	//Tag := queryVars.Get("tag")
 
 	ctx := request.Context()
 
@@ -42,32 +39,29 @@ func SearchRestaurant(writer http.ResponseWriter, request *http.Request, params 
 		Index(constants.ElasticsearchRestaurantIndex).
 		Type(constants.ElasticsearchRestaurantType)
 
-	if name != "" {
+	if name != "" && name != "NaN" {
+
 		search = search.Query(elastic.NewMatchPhraseQuery("name", name))
 	}
 
-	if city != "" {
+	if city != "" && city != "NaN" {
 		search = search.Query(elastic.NewMatchPhraseQuery("city", city))
 	}
 
-	if country != "" {
+	if country != "" && country != "NaN" {
 		search = search.Query(elastic.NewMatchPhraseQuery("country", country))
 	}
 
-	if averageCost != "" {
+	if averageCost != "" && averageCost != "NaN" {
 		search = search.Query(elastic.NewRangeQuery("average_cost").From(averageCost).To(999999999))
 	}
 
-	if address != "" {
+	if address != "" && address != "NaN" {
 		search = search.Query(elastic.NewMatchPhraseQuery("address", address))
 	}
 
-	if rate != "" {
+	if rate != "" && rate != "NaN" {
 		search = search.Query(elastic.NewRangeQuery("rate").From(rate).To(5))
-	}
-
-	if wifiAvailable != "" {
-		search = search.Query(elastic.NewMatchQuery("wifi_available", wifiAvailable))
 	}
 
 	searchResult, err := search.From(0).Size(20).Do(ctx)
@@ -90,6 +84,8 @@ func SearchRestaurant(writer http.ResponseWriter, request *http.Request, params 
 				log.StdoutLogger.WithError(err).Error("failed to unmarshal restaurant search result")
 			}
 
+			r.DocumentId = hit.Id
+
 			restaurants = append(restaurants, r)
 		}
 
@@ -107,7 +103,6 @@ func SearchRestaurant(writer http.ResponseWriter, request *http.Request, params 
 		return
 	}
 
-	request.Close = true
 }
 
 func CreateRestaurant(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
@@ -169,6 +164,7 @@ func UpdateRestaurant(writer http.ResponseWriter, request *http.Request, params 
 	updateResponse, err := ElasticsearchClient.Update().
 		Index(constants.ElasticsearchRestaurantIndex).
 		Type(constants.ElasticsearchRestaurantType).
+		Id(restaurantMap["document_id"].(string)).
 		Doc(restaurantMap).
 		Do(ctx)
 
@@ -221,7 +217,7 @@ func NewHttpServer() error {
 	// Get apis
 	router := httprouter.New()
 	router.GET("/healthcheck", HealthCheck)
-	router.GET("/search", SearchRestaurant)
+	router.GET("/restaurant/search", SearchRestaurant)
 	router.POST("/restaurant", CreateRestaurant)
 	router.PUT("/restaurant", UpdateRestaurant)
 	router.DELETE("/restaurant/:document_id", DeleteRestaurant)
